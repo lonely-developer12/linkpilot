@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    LinkPilot – URL Shortener
+    ============================================================
+    Main entry point for the LinkPilot web application.
+    Provides a clean, dark-themed interface for shortening URLs,
+    generating QR codes, and managing a local link history.
+
+    External dependencies:
+      - Inter font (Google Fonts)
+      - qrcodejs v1.0.0 (DOM-based QR code generator, no canvas/CORS issues)
+
+    Scripts:
+      - app.js          Main application controller (ES module)
+  -->
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Primary Meta Tags -->
+  <title>LinkPilot – Professional URL Shortener</title>
+  <meta name="description" content="LinkPilot shortens your URLs instantly and for free. Create short links via TinyURL or is.gd, generate QR codes, and manage your link history." />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="author" content="LinkPilot" />
+
+  <!-- Open Graph / Social Sharing -->
+  <meta property="og:title" content="LinkPilot – URL Shortener" />
+  <meta property="og:description" content="Shorten URLs, generate QR codes, manage your link history." />
+  <meta property="og:type" content="website" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Application Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!--
+    qrcodejs – Client-side QR Code Generator
+    Chosen because it renders QR codes directly into the DOM using
+    an <img> element (no canvas, no CORS restrictions, works offline).
+    Source: https://github.com/davidshimjs/qrcodejs
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- ============================================================
+       ROOT CONTAINER
+       Max-width wrapper that centers all page content.
+  ============================================================ -->
+  <div class="container">
+
+    <!-- ============================================================
+         HEADER
+         Displays the logo, app name, and tagline.
+    ============================================================ -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon" aria-hidden="true">✈️</div>
+        <span class="logo-text">LinkPilot</span>
+      </div>
+      <p class="tagline">Shorten links in seconds. Professional &amp; free.</p>
+    </header>
+
+    <!-- ============================================================
+         STATS BAR
+         Shows total links shortened and today's count.
+         Hidden by default; revealed by app.js when history exists.
+    ============================================================ -->
+    <div class="stats-bar" id="stats-bar" style="display: none;" aria-label="Shortening statistics">
+      <div class="stat-item">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">Links shortened</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-today">0</div>
+        <div class="stat-label">Today</div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         MAIN CARD
+         Primary interaction area: input, provider selection, results.
+    ============================================================ -->
+    <main class="card" aria-label="URL Shortener">
+
+      <!-- URL Input -->
+      <div class="form-group">
+        <label class="form-label" for="url-input">🔗 Enter Long URL</label>
+        <div class="input-wrapper">
+          <!-- Link icon inside the input field -->
+          <span class="input-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </span>
+          <input
+            type="url"
+            id="url-input"
+            class="url-input"
+            placeholder="https://example.com/very/long/url/that/needs/shortening..."
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Enter URL to shorten"
+            aria-describedby="input-error"
+          />
+        </div>
+        <!-- Character counter + validation error message -->
+        <div class="input-footer">
+          <div class="input-error-msg" id="input-error" role="alert" aria-live="assertive">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span class="error-text"></span>
+          </div>
+          <span class="char-count" id="char-count">0 characters</span>
+        </div>
+      </div>
+
+      <!-- Provider Selector + Shorten Button (side by side) -->
+      <div class="form-row">
+        <!-- Service provider dropdown -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label" for="provider-select">⚡ Provider</label>
+          <div class="select-wrapper">
+            <select id="provider-select" class="provider-select" aria-label="Select shortening provider">
+              <option value="tinyurl">TinyURL</option>
+              <option value="isgd">is.gd</option>
+            </select>
+            <!-- Custom dropdown arrow icon -->
+            <svg class="select-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Shorten button -->
+        <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+          <button id="shorten-btn" class="btn-primary" aria-label="Shorten the entered URL">
+            <!-- Loading spinner (hidden by default, shown while API call is in progress) -->
+            <div class="loading-spinner" id="loading-spinner" role="status" aria-label="Loading..."></div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+            </svg>
+            <span class="btn-text">Shorten link</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           RESULT SECTION
+           Hidden until a successful shortening response is received.
+           Revealed with a CSS transition via the "visible" class.
+      ============================================================ -->
+      <section
+        class="result-section"
+        id="result-section"
+        aria-live="polite"
+        aria-label="Shortened URL result"
+      >
+        <div class="result-label">✅ Your Short Link</div>
+
+        <!-- Shortened URL display box -->
+        <div class="result-url-box">
+          <span class="result-url-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </span>
+          <a id="short-url" href="#" target="_blank" rel="noopener noreferrer" class="short-url">–</a>
+        </div>
+
+        <!-- Action buttons for the result -->
+        <div class="result-actions">
+          <button id="copy-btn" class="btn-secondary" aria-label="Copy short link to clipboard">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+          </button>
+          <button id="qr-btn" class="btn-secondary" aria-label="Toggle QR code display">
+            ⬛ QR Code
+          </button>
+        </div>
+
+        <!-- ============================================================
+             QR CODE PANEL
+             Rendered by qrcodejs as a DOM <img> element.
+             Toggled by clicking the "QR Code" button.
+        ============================================================ -->
+        <div class="qr-container" id="qr-container" aria-label="QR Code panel">
+          <div class="qr-label">📱 QR Code</div>
+          <!-- qrcodejs injects an <img> element here -->
+          <div id="qr-canvas"></div>
+        </div>
+      </section>
+
+    </main><!-- /main.card -->
+
+    <!-- ============================================================
+         HISTORY SECTION
+         Displays up to 50 previously shortened links stored in
+         localStorage. Hidden when history is empty.
+    ============================================================ -->
+    <section class="history-section" id="history-section" aria-label="Link history">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-title-icon" aria-hidden="true">🕐</span>
+          History
+        </h2>
+        <button id="clear-history-btn" class="btn-ghost" aria-label="Clear all history entries">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+          </svg>
+          Clear all
+        </button>
+      </div>
+
+      <!-- History entries are rendered dynamically by renderHistory() in app.js -->
+      <div class="history-list" id="history-list" role="list" aria-label="List of previously shortened links"></div>
+    </section>
+
+    <!-- Provider attribution badges -->
+    <div class="provider-info" style="justify-content: center; margin-top: 1.5rem;" aria-label="Supported providers">
+      <span class="provider-badge">
+        <span class="provider-dot provider-dot-tinyurl" aria-hidden="true"></span>
+        TinyURL API
+      </span>
+      <span class="provider-badge">
+        <span class="provider-dot provider-dot-isgd" aria-hidden="true"></span>
+        is.gd API
+      </span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>LinkPilot &copy; 2026 – Built with ❤️ and JavaScript</p>
+    </footer>
+
+  </div><!-- /div.container -->
+
+  <!-- ============================================================
+       TOAST NOTIFICATION
+       Positioned fixed at the bottom of the viewport.
+       Managed entirely by showToast() in app.js.
+  ============================================================ -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ============================================================
+       APPLICATION SCRIPTS
+       app.js: Main controller (ES module).
+       Inline stats block updates the stats bar after history loads.
+  ============================================================ -->
+  <script type="module" src="app.js"></script>
+
+  <!-- Stats bar updater: reads history from HistoryService and populates counters -->
+  <script type="module">
+    import HistoryService from './services/history.js';
+
+    /**
+     * Reads the current history and updates the stats bar counters.
+     * The stats bar is only shown when at least one entry exists.
+     */
+    function updateStats() {
+      const all = HistoryService.getAll();
+      if (all.length === 0) return;
+
+      const today = new Date().toDateString();
+      const todayCount = all.filter(e => new Date(e.date).toDateString() === today).length;
+
+      document.getElementById('stats-bar').style.display = 'flex';
+      document.getElementById('stat-total').textContent = all.length;
+      document.getElementById('stat-today').textContent = todayCount;
+    }
+
+    // Initial update
+    updateStats();
+
+    // Re-run when window regains focus or a custom event fires
+    window.addEventListener('focus', updateStats);
+    document.addEventListener('linkpilot:history-updated', updateStats);
+  </script>
+
+</body>
+</html>
